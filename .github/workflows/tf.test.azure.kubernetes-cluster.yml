@@ -1,0 +1,28 @@
+name: terraform - test - azure/kubernetes-cluster
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tf.test.yml
+      - .github/workflows/tf.test.azure.kubernetes-cluster.yml
+      - '*.tf'
+      - '*.hcl'
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/tf.test.yml
+      - .github/workflows/tf.test.azure.kubernetes-cluster.yml
+      - '*.tf'
+      - '*.hcl'
+
+jobs:
+  test:
+    uses: ./.github/workflows/tf.test.yml
+    with:
+      tf_version: latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write

@@ -1,0 +1,112 @@
+######################################################
+# Terraform Test Workflow
+#
+# Performs a simple test to ensure that Terraform is:
+# - Formatted correctly
+# - Initializes without a backend
+# - Validates
+#
+# ###OMITTED###
+# # permissions block is required
+# # to ensure it can write to checks and PRs
+# jobs:
+#   module_test_job:
+#     uses: ./.github/workflows/tf.test.yml
+#     with:
+#       tf_path: path/to/module
+#     permissions:
+#       contents: read
+#       checks: write
+#       pull-requests: write
+# ###OMITTED###
+######################################################
+
+name: terraform - test
+
+on:
+  workflow_call:
+    inputs:
+      tf_version:
+        required: false
+        type: string
+        description: Terraform version to use.
+        default: latest
+      reviewdog_pr_reporter:
+        required: false
+        type: string
+        description: The reporter to use with Reviewdog and PR.
+        default: github-pr-review
+
+env:
+  TF_IN_AUTOMATION: true
+  TF_INPUT: false
+  TF_CLI_ARGS_init: -backend=false
+  tf_version: ${{ inputs.tf_version }}
+  tf_path: .
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v3
+      - name: setup terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.tf_version }}
+      - name: terraform fmt
+        run: terraform fmt -check
+        continue-on-error: true
+      - name: terraform init
+        run: terraform init
+      - name: terraform validate
+        run: terraform validate
+
+  lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v3
+      - name: tflint
+        uses: reviewdog/action-tflint@v1
+        with:
+          filter_mode: nofilter
+          reporter: github-check
+          fail_on_error: false
+          tflint_init: true
+        if: github.event_name == 'push'
+      - name: tflint-pr
+        uses: reviewdog/action-tflint@v1
+        with:
+          filter_mode: nofilter
+          reporter: ${{ inputs.reviewdog_pr_reporter }}
+          fail_on_error: false
+          tflint_init: true
+        if: github.event_name == 'pull_request'
+
+  tfsec:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v3
+      - name: tfsec
+        uses: reviewdog/action-tfsec@v1
+        with:
+          filter_mode: nofilter
+          reporter: github-check
+          fail_on_error: true
+        if: github.event_name == 'push'
+      - name: tfsec
+        uses: reviewdog/action-tfsec@v1
+        with:
+          filter_mode: nofilter
+          reporter: ${{ inputs.reviewdog_pr_reporter }}
+          fail_on_error: true
+        if: github.event_name == 'pull_request'

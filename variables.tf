@@ -19,34 +19,6 @@ variable "tags" {
   default     = null
 }
 
-#############
-# Monitoring
-#############
-
-variable "use_log_analytics" {
-  description = "Use Log Analytics for monitoring the deployed resources."
-  type        = bool
-  default     = false
-}
-
-variable "log_analytics_workspace_id" {
-  description = "Log analytics workspace ID to use if providing an existing workspace."
-  type        = string
-  default     = null
-}
-
-variable "enable_microsoft_defender" {
-  description = "Enable Microsoft Defender integration with the cluster."
-  type        = bool
-  default     = false
-}
-
-variable "microsoft_defender_log_analytics_workspace_id" {
-  description = "Log analytics workspace ID used with Microsoft Defender."
-  type        = string
-  default     = null
-}
-
 ###########
 # Security
 ###########
@@ -80,9 +52,9 @@ variable "enable_workload_identity" {
   default     = true
 }
 
-variable "aad_admin_group_object_ids" {
+variable "admin_object_ids" {
   description = "Object IDs of AAD Groups that have Admin role over the cluster. These groups will also have read privileges of Azure-level resources."
-  type        = list(string)
+  type        = set(string)
   default     = []
 }
 
@@ -90,16 +62,6 @@ variable "authorized_ip_ranges" {
   description = "CIDRs authorized to communicate with the API Server."
   type        = list(string)
   default     = ["0.0.0.0/0"]
-}
-
-##########
-# Storage
-##########
-
-variable "registry_ids" {
-  description = "List of registry IDs to give this cluster AcrPull access to."
-  type        = list(string)
-  default     = []
 }
 
 ######
@@ -160,6 +122,12 @@ variable "sku_tier" {
   default     = "Free"
 }
 
+variable "use_user_assigned_cluster_identity" {
+  description = "Use a user assigned identity for cluster identity."
+  type        = bool
+  default     = false
+}
+
 variable "cluster_identity" {
   description = "Cluster identity config."
   type = object({
@@ -189,7 +157,7 @@ variable "use_azure_cni" {
 variable "service_cidr" {
   description = "Service CIDR for AKS."
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "10.250.0.0/20"
 
   validation {
     condition     = can(regex("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/\\d{2}", var.service_cidr))
@@ -197,10 +165,16 @@ variable "service_cidr" {
   }
 }
 
+variable "subnet_id" {
+  description = "Subnet ID to use with the default nodepool if using Azure CNI."
+  type        = string
+  default     = null
+}
+
 variable "node_size" {
   description = "Size of nodes in the default node pool."
   type        = string
-  default     = "Standard_B2ms"
+  default     = "Standard_D2s_v3"
 }
 
 variable "node_count" {
@@ -215,31 +189,13 @@ variable "node_count_max" {
   default     = null
 }
 
-variable "subnet_id" {
-  description = "Subnet ID to use with the default nodepool if using Azure CNI."
-  type        = string
-  default     = null
-}
-
-variable "pod_subnet_id" {
-  description = "Subnet ID to use with default nodepool pods for Azure CNI."
-  type        = string
-  default     = null
-}
-
-variable "node_critical_addons_only" {
-  description = "Taint the default node pool with 'CriticalAddonsOnly=true:NoSchedule'."
-  type        = bool
-  default     = false
-}
-
 variable "node_config" {
   description = "Additional default node pool configuration not covered by base variables."
   type = object({
     pool_name = optional(string, "system")
     tags      = optional(map(string))
 
-    zones                    = optional(list(number), [1, 2, 3])
+    zones                    = optional(set(number))
     enable_node_public_ip    = optional(bool, false)
     node_public_ip_prefix_id = optional(string)
 
@@ -252,6 +208,7 @@ variable "node_config" {
     fips_enabled           = optional(bool)
 
     orchestrator_version = optional(string)
+    critical_addons_only = optional(bool, false)
     max_pods             = optional(number, 50)
     node_labels          = optional(map(string))
   })
@@ -283,6 +240,12 @@ variable "auto_scaler_profile" {
   default = {}
 }
 
+variable "use_user_assigned_kubelet_identity" {
+  description = "Use a user assigned identity for kubelet identity."
+  type        = bool
+  default     = false
+}
+
 variable "kubelet_identity" {
   description = "Kubelet identity config."
   type = object({
@@ -292,6 +255,10 @@ variable "kubelet_identity" {
   })
   default = null
 }
+
+##########
+# Plugins
+##########
 
 variable "enable_azure_policy" {
   description = "Enable the Azure Policy plugin."
@@ -311,75 +278,61 @@ variable "enable_open_service_mesh" {
   default     = false
 }
 
-variable "enable_ingress_application_gateway" {
-  description = "Enable the ingress application gateway plugin."
-  type        = bool
-  default     = false
-}
-
-variable "ingress_application_gateway_id" {
-  description = "The ID of an existing Application Gateway to integrate with AKS."
-  type        = string
-  default     = null
-}
-
-variable "ingress_application_gateway_name" {
-  description = "The name of an Application Gateway to integrate with AKS or create in the Nodepool resource group."
-  type        = string
-  default     = null
-}
-
-variable "ingress_application_subnet_id" {
-  description = "The ID of the Subnet the Application Gateway will be created on."
-  type        = string
-  default     = null
-}
-
-variable "ingress_application_subnet_cidr" {
-  description = "The CIDR used when creating an Application Gateway."
-  type        = string
-  default     = null
-}
-
-variable "enable_blob_driver" {
-  description = "Enable blob_driver feature on the storage profile of the cluster."
-  type        = bool
-  default     = null
-}
-
-variable "enable_disk_driver" {
-  description = "Enable disk_driver feature on the storage profile of the cluster."
-  type        = bool
-  default     = null
-}
-
-variable "disk_driver_version" {
-  description = "Version of the disk_driver feature on the storage profile of the cluster."
-  type        = bool
-  default     = null
-}
-
-variable "enable_file_driver" {
-  description = "Enable file_driver feature on the storage profile of the cluster."
-  type        = bool
-  default     = null
-}
-
-variable "enable_azure_keyvault_secrets_provider" {
-  description = "Enable the Azure Keyvault secrets provider plugin."
-  type        = bool
-  default     = false
-}
-
-variable "azure_keyvault_secrets_provider_config" {
-  description = "Object containing configuration for the Azure Keyvault secrets provider plugin."
+variable "log_analytics" {
+  description = "Configuration for the OMS Agent plugin."
   type = object({
+    enabled         = optional(bool, false)
+    enable_msi_auth = optional(bool, true)
+    workspace_id    = optional(string)
+  })
+  default = {}
+
+  validation {
+    condition = anytrue([
+      (var.log_analytics["enabled"] && var.log_analytics["workspace_id"] != null),
+      (!var.log_analytics["enabled"])
+    ])
+    error_message = "If enabled, workspace_id must also be provided."
+  }
+}
+
+variable "microsoft_defender" {
+  description = "Configuration for the Microsoft Defender plugin."
+  type = object({
+    enabled      = optional(bool, false)
+    workspace_id = optional(string)
+  })
+  default = {}
+
+  validation {
+    condition = anytrue([
+      (var.microsoft_defender["enabled"] && var.microsoft_defender["workspace_id"] != null),
+      (!var.microsoft_defender["enabled"])
+    ])
+    error_message = "If enabled, workspace_id must also be provided."
+  }
+}
+
+variable "storage_profile" {
+  description = "Storage profile of the cluster."
+  type = object({
+    blob_driver_enabled         = optional(bool)
+    file_driver_enabled         = optional(bool)
+    disk_driver_enabled         = optional(bool)
+    disk_driver_version         = optional(string)
+    snapshot_controller_enabled = optional(bool)
+  })
+  default = {}
+}
+
+variable "key_vault_secrets_provider" {
+  description = "Configuration for the key vault secrets provider plugin."
+  type = object({
+    enabled                = optional(bool, false)
     enable_secret_rotation = optional(bool, true)
     rotation_interval      = optional(string, "2m")
   })
-  default = {
-    enable_secret_rotation = true
-  }
+  default = {}
 }
 
 variable "enable_flux" {

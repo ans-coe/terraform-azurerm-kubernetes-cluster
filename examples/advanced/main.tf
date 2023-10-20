@@ -77,13 +77,12 @@ resource "azurerm_user_assigned_identity" "akc_nodepool" {
   tags                = local.tags
 }
 
-resource "azurerm_role_assignment" "akc_nodepool_identity" {
-  description                      = "Assign the AKS identity Contributor rights to the Nodepool identity."
-  principal_id                     = azurerm_user_assigned_identity.akc.principal_id
-  skip_service_principal_aad_check = true
+resource "azurerm_role_assignment" "akc_nodepool_acr_pull" {
+  principal_id         = azurerm_user_assigned_identity.akc_nodepool.principal_id
+  scope                = azurerm_container_registry.akc.id
+  role_definition_name = "AcrPull"
 
-  role_definition_name = "Contributor"
-  scope                = azurerm_user_assigned_identity.akc_nodepool.id
+  skip_service_principal_aad_check = true
 }
 
 module "akc" {
@@ -94,8 +93,8 @@ module "akc" {
   resource_group_name = azurerm_resource_group.akc.name
   tags                = local.tags
 
-  authorized_ip_ranges       = ["${data.http.my_ip.response_body}/32"]
-  aad_admin_group_object_ids = []
+  authorized_ip_ranges = ["${data.http.my_ip.response_body}/32"]
+  admin_object_ids     = []
 
   # cluster_identity and kubelet_identity
   # supports directly passing in identity resource
@@ -121,7 +120,6 @@ module "akc" {
     scale_down_utilization_threshold = 0.3
   }
 
-  use_log_analytics               = true
   enable_azure_policy             = true
   enable_http_application_routing = false
   enable_open_service_mesh        = true
@@ -134,10 +132,6 @@ module "akc" {
     },
     { day = "Sunday" }
   ]
-
-  # Requires the registry to exist as value can't be determined.
-  # Run terraform apply -target azurerm_container_registry.akc first
-  registry_ids = [azurerm_container_registry.akc.id]
 
   depends_on = [azurerm_role_assignment.akc_nodepool_identity]
 }

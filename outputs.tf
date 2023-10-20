@@ -1,12 +1,3 @@
-###############
-# Log Analytics
-###############
-
-output "log_analytics_id" {
-  description = "ID of the log analytics."
-  value       = local.log_analytics_workspace_id
-}
-
 ############################
 # Azure Kubernetes cluster
 ############################

@@ -37,6 +37,14 @@ resource "azurerm_container_registry" "akc" {
   public_network_access_enabled = true
 }
 
+resource "azurerm_role_assignment" "akc_acrpull" {
+  principal_id         = module.akc.nodepool_identity.principal_id
+  scope                = azurerm_container_registry.akc.id
+  role_definition_name = "AcrPull"
+
+  skip_service_principal_aad_check = true
+}
+
 module "akc" {
   source = "../../"
 
@@ -46,6 +54,4 @@ module "akc" {
   tags                = local.tags
 
   node_count = 2
-
-  registry_ids = [azurerm_container_registry.akc.id]
 }

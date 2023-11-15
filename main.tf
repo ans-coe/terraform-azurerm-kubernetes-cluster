@@ -1,54 +1,68 @@
-#############
-# Monitoring
-#############
+###########
+# Identity
+###########
 
-resource "azurerm_log_analytics_workspace" "main" {
-  count = var.use_log_analytics && var.log_analytics_workspace_id == null ? 1 : 0
-
-  name                = "log-${var.name}"
+resource "azurerm_user_assigned_identity" "cluster" {
+  name                = var.cluster_identity_name == null ? "id-${var.name}" : var.cluster_identity_name
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = var.tags
-
-  sku               = "PerGB2018"
-  retention_in_days = 30
 }
 
-locals {
-  log_analytics_workspace_id = var.use_log_analytics && var.log_analytics_workspace_id == null ? one(azurerm_log_analytics_workspace.main[*].id) : var.log_analytics_workspace_id
+resource "azurerm_user_assigned_identity" "nodepool" {
+  name                = var.nodepool_identity_name == null ? "id-nodepool-${var.name}" : var.nodepool_identity_name
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = var.tags
 }
 
-resource "azurerm_role_assignment" "main_log_analytics_read" {
-  for_each = toset(var.use_log_analytics ? var.aad_admin_group_object_ids : [])
-
-  description          = format("Allows the group ID %s read access to the Log Analytics %s.", each.value, local.log_analytics_workspace_id)
-  principal_id         = each.value
-  scope                = local.log_analytics_workspace_id
-  role_definition_name = "Log Analytics Reader"
-
-  skip_service_principal_aad_check = false
-}
-
-##########
-# Storage
-##########
-
-resource "azurerm_role_assignment" "main_acr_pull" {
-  for_each = toset(var.registry_ids)
-
-  description          = format("Allows the Kubernetes cluster %s to pull images from the ACR %s.", azurerm_kubernetes_cluster.main.id, each.value)
-  principal_id         = one(azurerm_kubernetes_cluster.main.kubelet_identity[*].object_id)
-  scope                = each.value
-  role_definition_name = "AcrPull"
+resource "azurerm_role_assignment" "main_aks_user_identity_kubelet_identity_contributor" {
+  principal_id         = azurerm_user_assigned_identity.cluster.principal_id
+  scope                = azurerm_user_assigned_identity.nodepool.id
+  role_definition_name = "Managed Identity Operator"
 
   skip_service_principal_aad_check = true
 }
 
 ##########
-# Compute
+# Cluster
 ##########
 
-# Ignore tfsec rule relating to configuring monitoring and RBAC rule as it is implicitly enabled on this version.
+locals {
+  use_public_dns_prefix = anytrue([
+    (var.enable_private_cluster && var.private_dns_zone_id == "System"),
+    (!var.enable_private_cluster),
+  ])
+  use_private_dns_prefix = anytrue([
+    (var.enable_private_cluster && var.private_dns_zone_id != "System")
+  ])
+}
+
+// NOTE: scope has been set up to ensure name-based errors don't occur, as the resource
+//       checks the schema of the name
+
+resource "azurerm_role_assignment" "main_aks_user_identity_network_contributor" {
+  count = var.use_azure_cni ? 1 : 0
+
+  principal_id = azurerm_user_assigned_identity.cluster.principal_id
+  // NOTE: converts the subnet_id to the vnet_id to set role at a higher level
+  scope                = try(one(regex("(/.*)/subnets", var.subnet_id)), "/subscriptions/UNUSED")
+  role_definition_name = "Network Contributor"
+
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "main_aks_user_identity_private_dns_zone_contributor" {
+  count = var.enable_private_cluster && var.private_dns_zone_id != "System" ? 1 : 0
+
+  principal_id         = azurerm_user_assigned_identity.cluster.principal_id
+  scope                = coalesce(var.private_dns_zone_id, "/subscriptions/UNUSED")
+  role_definition_name = "Private DNS Zone Contributor"
+
+  skip_service_principal_aad_check = true
+}
+
+// NOTE: ignore tfsec rule relating to configuring monitoring and RBAC rule as it is implicitly enabled on this version.
 #tfsec:ignore:azure-container-logging tfsec:ignore:azure-container-use-rbac-permissions tfsec:ignore:azure-container-limit-authorized-ips
 resource "azurerm_kubernetes_cluster" "main" {
   name                = var.name
@@ -56,42 +70,25 @@ resource "azurerm_kubernetes_cluster" "main" {
   resource_group_name = var.resource_group_name
   tags                = var.tags
 
-  dns_prefix                = var.name
+  dns_prefix                = local.use_public_dns_prefix ? var.name : null
   kubernetes_version        = var.kubernetes_version == null ? data.azurerm_kubernetes_service_versions.current.latest_version : var.kubernetes_version
   automatic_channel_upgrade = var.automatic_channel_upgrade
   sku_tier                  = var.sku_tier
 
-  public_network_access_enabled = var.enable_private_cluster ? false : true
+  private_cluster_enabled    = var.enable_private_cluster
+  dns_prefix_private_cluster = local.use_private_dns_prefix ? var.name : null
+  private_dns_zone_id        = local.use_private_dns_prefix ? var.private_dns_zone_id : null
+
   api_server_access_profile {
     authorized_ip_ranges = var.enable_private_cluster ? null : var.authorized_ip_ranges
   }
-  private_cluster_enabled = var.enable_private_cluster
-  private_dns_zone_id     = var.enable_private_cluster ? var.private_dns_zone_id : null
-
-  run_command_enabled    = var.enable_run_command
-  local_account_disabled = true
-  oidc_issuer_enabled    = var.enable_oidc_issuer
   azure_active_directory_role_based_access_control {
     managed                = true
-    tenant_id              = var.aad_tenant_id
-    admin_group_object_ids = var.aad_admin_group_object_ids
+    admin_group_object_ids = var.admin_object_ids
     azure_rbac_enabled     = true
   }
-
-  workload_identity_enabled = var.enable_workload_identity
-  identity {
-    type         = var.cluster_identity == null ? "SystemAssigned" : "UserAssigned"
-    identity_ids = var.cluster_identity == null ? [] : [var.cluster_identity["id"]]
-  }
-
-  dynamic "kubelet_identity" {
-    for_each = var.kubelet_identity == null ? [] : [1]
-    content {
-      user_assigned_identity_id = var.kubelet_identity["id"]
-      object_id                 = var.kubelet_identity["principal_id"]
-      client_id                 = var.kubelet_identity["client_id"]
-    }
-  }
+  run_command_enabled    = var.enable_run_command
+  local_account_disabled = true
 
   network_profile {
     network_plugin    = var.use_azure_cni ? "azure" : "kubenet"
@@ -103,9 +100,15 @@ resource "azurerm_kubernetes_cluster" "main" {
     dns_service_ip = cidrhost(var.service_cidr, 10)
   }
 
+  kubelet_identity {
+    user_assigned_identity_id = azurerm_user_assigned_identity.nodepool.id
+    object_id                 = azurerm_user_assigned_identity.nodepool.principal_id
+    client_id                 = azurerm_user_assigned_identity.nodepool.client_id
+  }
+
   default_node_pool {
     name                        = lower(replace(var.node_config["pool_name"], "/[_-]/", ""))
-    temporary_name_for_rotation = "reconfigtmp"
+    temporary_name_for_rotation = "systmp"
     type                        = "VirtualMachineScaleSets"
     tags                        = merge(var.tags, var.node_config["tags"])
 
@@ -117,7 +120,6 @@ resource "azurerm_kubernetes_cluster" "main" {
 
     zones                    = var.node_config["zones"]
     vnet_subnet_id           = var.use_azure_cni ? var.subnet_id : null
-    pod_subnet_id            = var.use_azure_cni ? var.pod_subnet_id : null
     enable_node_public_ip    = var.node_config["enable_node_public_ip"]
     node_public_ip_prefix_id = var.node_config["node_public_ip_prefix_id"]
 
@@ -131,8 +133,12 @@ resource "azurerm_kubernetes_cluster" "main" {
 
     orchestrator_version         = var.node_config["orchestrator_version"]
     max_pods                     = var.node_config["max_pods"]
-    only_critical_addons_enabled = var.node_critical_addons_only
+    only_critical_addons_enabled = var.node_config["critical_addons_only"]
     node_labels                  = var.node_config["node_labels"]
+
+    upgrade_settings {
+      max_surge = "10%"
+    }
   }
 
   auto_scaler_profile {
@@ -156,47 +162,40 @@ resource "azurerm_kubernetes_cluster" "main" {
     scale_down_delay_after_failure   = var.auto_scaler_profile["scale_down_delay_after_failure"]
   }
 
+  oidc_issuer_enabled              = var.enable_oidc_issuer
+  workload_identity_enabled        = var.enable_workload_identity
   azure_policy_enabled             = var.enable_azure_policy
   http_application_routing_enabled = var.enable_http_application_routing
   open_service_mesh_enabled        = var.enable_open_service_mesh
 
   dynamic "oms_agent" {
-    for_each = var.use_log_analytics ? [1] : []
+    for_each = var.log_analytics["enabled"] ? [1] : []
     content {
-      log_analytics_workspace_id      = local.log_analytics_workspace_id
-      msi_auth_for_monitoring_enabled = true
+      log_analytics_workspace_id      = var.log_analytics["workspace_id"]
+      msi_auth_for_monitoring_enabled = var.log_analytics["enable_msi_auth"]
     }
   }
 
   dynamic "microsoft_defender" {
-    for_each = var.enable_microsoft_defender ? [1] : []
+    for_each = var.microsoft_defender["enabled"] ? [1] : []
     content {
-      log_analytics_workspace_id = var.microsoft_defender_log_analytics_workspace_id
-    }
-  }
-
-  dynamic "ingress_application_gateway" {
-    for_each = var.enable_ingress_application_gateway ? [1] : []
-    content {
-      gateway_id   = var.ingress_application_gateway_id
-      gateway_name = var.ingress_application_gateway_name
-      subnet_id    = var.ingress_application_subnet_id
-      subnet_cidr  = var.ingress_application_subnet_cidr
+      log_analytics_workspace_id = var.microsoft_defender["workspace_id"]
     }
   }
 
   storage_profile {
-    blob_driver_enabled = var.enable_blob_driver
-    disk_driver_enabled = var.enable_disk_driver
-    disk_driver_version = var.disk_driver_version
-    file_driver_enabled = var.enable_file_driver
+    blob_driver_enabled         = var.storage_profile["blob_driver_enabled"]
+    file_driver_enabled         = var.storage_profile["file_driver_enabled"]
+    disk_driver_enabled         = var.storage_profile["disk_driver_enabled"]
+    disk_driver_version         = var.storage_profile["disk_driver_version"]
+    snapshot_controller_enabled = var.storage_profile["snapshot_controller_enabled"]
   }
 
   dynamic "key_vault_secrets_provider" {
-    for_each = var.enable_azure_keyvault_secrets_provider ? [1] : []
+    for_each = var.key_vault_secrets_provider["enabled"] ? [1] : []
     content {
-      secret_rotation_enabled  = var.azure_keyvault_secrets_provider_config["enable_secret_rotation"]
-      secret_rotation_interval = var.azure_keyvault_secrets_provider_config["rotation_interval"]
+      secret_rotation_enabled  = var.key_vault_secrets_provider["enable_secret_rotation"]
+      secret_rotation_interval = var.key_vault_secrets_provider["rotation_interval"]
     }
   }
 
@@ -212,6 +211,18 @@ resource "azurerm_kubernetes_cluster" "main" {
       }
     }
   }
+
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.cluster.id]
+  }
+
+  depends_on = [
+    // NOTE: Required as this functions with the user identity.
+    azurerm_role_assignment.main_aks_user_identity_network_contributor,
+    azurerm_role_assignment.main_aks_user_identity_private_dns_zone_contributor,
+    azurerm_role_assignment.main_aks_user_identity_kubelet_identity_contributor,
+  ]
 
   lifecycle {
     ignore_changes = [
@@ -232,57 +243,16 @@ resource "azurerm_kubernetes_cluster_extension" "main_flux" {
   release_train     = "Stable"
 }
 
-resource "azurerm_role_assignment" "main_aks_reader" {
-  for_each = toset(var.aad_admin_group_object_ids)
-
-  description          = format("Allows the group ID %s read access to the cluster %s.", each.value, azurerm_kubernetes_cluster.main.id)
-  principal_id         = each.value
-  scope                = azurerm_kubernetes_cluster.main.id
-  role_definition_name = "Reader"
-
-  skip_service_principal_aad_check = false
-}
+##############################
+# Additional role assignments
+##############################
 
 resource "azurerm_role_assignment" "main_aks_cluster_admin" {
-  for_each = toset(var.aad_admin_group_object_ids)
+  for_each = var.admin_object_ids
 
-  description          = format("Allows the group ID %s to have cluster admin permissions %s.", each.value, azurerm_kubernetes_cluster.main.id)
   principal_id         = each.value
   scope                = azurerm_kubernetes_cluster.main.id
   role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
 
   skip_service_principal_aad_check = false
-}
-
-resource "azurerm_role_assignment" "main_aks_cluster_user" {
-  for_each = toset(var.aad_admin_group_object_ids)
-
-  description          = format("Allows the group ID %s to list their cluster user on %s.", each.value, azurerm_kubernetes_cluster.main.id)
-  principal_id         = each.value
-  scope                = azurerm_kubernetes_cluster.main.id
-  role_definition_name = "Azure Kubernetes Service Cluster User Role"
-
-  skip_service_principal_aad_check = false
-}
-
-resource "azurerm_role_assignment" "main_aks_node_network_contributor" {
-  count = var.use_azure_cni ? 1 : 0
-
-  description          = format("Allows the Kubernetes cluster %s to manage the subnet %s.", azurerm_kubernetes_cluster.main.id, var.subnet_id)
-  principal_id         = var.cluster_identity != null ? var.cluster_identity["principal_id"] : one(azurerm_kubernetes_cluster.main.identity[*].principal_id)
-  scope                = var.subnet_id
-  role_definition_name = "Network Contributor"
-
-  skip_service_principal_aad_check = true
-}
-
-resource "azurerm_role_assignment" "main_aks_pod_network_contributor" {
-  count = var.use_azure_cni && var.pod_subnet_id != null ? 1 : 0
-
-  description          = format("Allows the Kubernetes cluster %s to manage the subnet %s.", azurerm_kubernetes_cluster.main.id, var.pod_subnet_id)
-  principal_id         = var.cluster_identity != null ? var.cluster_identity["principal_id"] : one(azurerm_kubernetes_cluster.main.identity[*].principal_id)
-  scope                = var.pod_subnet_id
-  role_definition_name = "Network Contributor"
-
-  skip_service_principal_aad_check = true
 }

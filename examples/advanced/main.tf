@@ -12,9 +12,11 @@ provider "azurerm" {
 locals {
   location = "uksouth"
   tags = {
-    module  = "kubernetes-cluster"
-    example = "advanced"
-    usage   = "demo"
+    module     = "kubernetes-cluster"
+    example    = "with-cr"
+    usage      = "demo"
+    owner      = "demo"
+    department = "coe"
   }
   resource_prefix = "akc-adv-demo-uks-03"
 }

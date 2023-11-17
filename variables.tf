@@ -126,7 +126,7 @@ variable "service_cidr" {
   default     = "10.250.0.0/20"
 
   validation {
-    condition     = can(regex("\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}/\\d{2}", var.service_cidr))
+    condition     = can(cidrhost(var.service_cidr, 0))
     error_message = "The service_cidr must be a valid CIDR range."
   }
 }
@@ -252,11 +252,13 @@ variable "enable_open_service_mesh" {
 variable "log_analytics" {
   description = "Configuration for the OMS Agent plugin."
   type = object({
-    enabled         = optional(bool, false)
+    enabled         = bool
     enable_msi_auth = optional(bool, true)
     workspace_id    = optional(string)
   })
-  default = {}
+  default = {
+    enabled = false
+  }
 
   validation {
     condition = anytrue([
@@ -270,10 +272,12 @@ variable "log_analytics" {
 variable "microsoft_defender" {
   description = "Configuration for the Microsoft Defender plugin."
   type = object({
-    enabled      = optional(bool, false)
+    enabled      = bool
     workspace_id = optional(string)
   })
-  default = {}
+  default = {
+    enabled = false
+  }
 
   validation {
     condition = anytrue([
@@ -299,11 +303,13 @@ variable "storage_profile" {
 variable "key_vault_secrets_provider" {
   description = "Configuration for the key vault secrets provider plugin."
   type = object({
-    enabled                = optional(bool, false)
+    enabled                = bool
     enable_secret_rotation = optional(bool, true)
     rotation_interval      = optional(string, "2m")
   })
-  default = {}
+  default = {
+    enabled = false
+  }
 }
 
 variable "enable_flux" {

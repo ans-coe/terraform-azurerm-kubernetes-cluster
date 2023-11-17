@@ -12,9 +12,11 @@ provider "azurerm" {
 locals {
   location = "uksouth"
   tags = {
-    module  = "kubernetes-cluster"
-    example = "advanced"
-    usage   = "demo"
+    module     = "kubernetes-cluster"
+    example    = "with-cr"
+    usage      = "demo"
+    owner      = "demo"
+    department = "coe"
   }
   resource_prefix = "akc-adv-demo-uks-03"
 }
@@ -63,27 +65,12 @@ resource "azurerm_subnet" "akc" {
   service_endpoints = ["Microsoft.ContainerRegistry"]
 }
 
-resource "azurerm_user_assigned_identity" "akc" {
-  name                = "id-${local.resource_prefix}"
-  location            = local.location
-  resource_group_name = azurerm_resource_group.akc.name
-  tags                = local.tags
-}
+resource "azurerm_role_assignment" "akc_nodepool_acr_pull" {
+  principal_id         = module.akc.nodepool_identity.principal_id
+  scope                = azurerm_container_registry.akc.id
+  role_definition_name = "AcrPull"
 
-resource "azurerm_user_assigned_identity" "akc_nodepool" {
-  name                = "id-np-${local.resource_prefix}"
-  location            = local.location
-  resource_group_name = azurerm_resource_group.akc.name
-  tags                = local.tags
-}
-
-resource "azurerm_role_assignment" "akc_nodepool_identity" {
-  description                      = "Assign the AKS identity Contributor rights to the Nodepool identity."
-  principal_id                     = azurerm_user_assigned_identity.akc.principal_id
   skip_service_principal_aad_check = true
-
-  role_definition_name = "Contributor"
-  scope                = azurerm_user_assigned_identity.akc_nodepool.id
 }
 
 module "akc" {
@@ -94,13 +81,8 @@ module "akc" {
   resource_group_name = azurerm_resource_group.akc.name
   tags                = local.tags
 
-  authorized_ip_ranges       = ["${data.http.my_ip.response_body}/32"]
-  aad_admin_group_object_ids = []
-
-  # cluster_identity and kubelet_identity
-  # supports directly passing in identity resource
-  cluster_identity = azurerm_user_assigned_identity.akc
-  kubelet_identity = azurerm_user_assigned_identity.akc_nodepool
+  authorized_ip_ranges = ["${data.http.my_ip.response_body}/32"]
+  admin_object_ids     = []
 
   node_count     = 2
   node_count_max = 3
@@ -121,7 +103,6 @@ module "akc" {
     scale_down_utilization_threshold = 0.3
   }
 
-  use_log_analytics               = true
   enable_azure_policy             = true
   enable_http_application_routing = false
   enable_open_service_mesh        = true
@@ -134,10 +115,4 @@ module "akc" {
     },
     { day = "Sunday" }
   ]
-
-  # Requires the registry to exist as value can't be determined.
-  # Run terraform apply -target azurerm_container_registry.akc first
-  registry_ids = [azurerm_container_registry.akc.id]
-
-  depends_on = [azurerm_role_assignment.akc_nodepool_identity]
 }

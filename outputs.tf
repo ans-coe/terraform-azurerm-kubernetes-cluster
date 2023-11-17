@@ -1,12 +1,3 @@
-###############
-# Log Analytics
-###############
-
-output "log_analytics_id" {
-  description = "ID of the log analytics."
-  value       = local.log_analytics_workspace_id
-}
-
 ############################
 # Azure Kubernetes cluster
 ############################
@@ -33,12 +24,12 @@ output "node_resource_group_name" {
 
 output "identity" {
   description = "Azure Kubernetes cluster identity."
-  value       = one(azurerm_kubernetes_cluster.main.identity)
+  value       = azurerm_user_assigned_identity.cluster
 }
 
-output "kubelet_identity" {
+output "nodepool_identity" {
   description = "Azure Kubernetes cluster kubelet identity."
-  value       = one(azurerm_kubernetes_cluster.main.kubelet_identity)
+  value       = azurerm_user_assigned_identity.nodepool
 }
 
 output "oidc_issuer_url" {

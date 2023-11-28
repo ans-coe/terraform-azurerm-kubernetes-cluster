@@ -103,16 +103,26 @@ variable "enable_run_command" {
   default     = false
 }
 
-variable "use_azure_cni" {
-  description = "Use Azure CNI."
-  type        = bool
-  default     = false
-}
+variable "azure_cni" {
+  description = "Azure CNI configuration."
+  type = object({
+    enabled             = bool
+    enable_overlay_mode = optional(bool, false)
+    subnet_id           = optional(string)
+  })
+  default = {
+    enabled = false
+  }
 
-variable "use_azure_cni_overlay" {
-  description = "Use Azure CNI in Overlay mode."
-  type        = bool
-  default     = false
+  validation {
+    condition     = var.azure_cni["enabled"] ? var.azure_cni["subnet_id"] != null : true
+    error_message = "If azure_cni is enabled, subnet_id must be provided."
+  }
+
+  validation {
+    condition     = var.azure_cni["enable_overlay_mode"] ? var.azure_cni["enabled"] : true
+    error_message = "If enable_overlay_mode is configured, azure_cni must be enabled."
+  }
 }
 
 variable "network_policy" {
@@ -135,12 +145,6 @@ variable "service_cidr" {
     condition     = can(cidrhost(var.service_cidr, 0))
     error_message = "The service_cidr must be a valid CIDR range."
   }
-}
-
-variable "subnet_id" {
-  description = "Subnet ID to use with the default nodepool if using Azure CNI."
-  type        = string
-  default     = null
 }
 
 variable "node_size" {

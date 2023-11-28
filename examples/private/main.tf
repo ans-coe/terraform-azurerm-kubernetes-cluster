@@ -75,8 +75,10 @@ module "akc" {
     data.azurerm_subscription.current.subscription_id, "rg-${local.resource_prefix}", local.location
   )
 
-  use_azure_cni  = true
-  subnet_id      = azurerm_subnet.akc.id
+  azure_cni = {
+    enabled   = true
+    subnet_id = azurerm_subnet.akc.id
+  }
   network_policy = "azure"
 
   // NOTE: Add an explicit dependenccy to the private DNS zone.

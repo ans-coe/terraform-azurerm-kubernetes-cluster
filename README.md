@@ -34,6 +34,7 @@ Examples can be found under the [examples](./examples/) directory.
 | <a name="input_authorized_ip_ranges"></a> [authorized\_ip\_ranges](#input\_authorized\_ip\_ranges) | CIDRs authorized to communicate with the API Server. | `list(string)` | <pre>[<br>  "0.0.0.0/0"<br>]</pre> | no |
 | <a name="input_auto_scaler_profile"></a> [auto\_scaler\_profile](#input\_auto\_scaler\_profile) | Autoscaler config. | <pre>object({<br>    scan_interval                 = optional(string)<br>    skip_nodes_with_local_storage = optional(bool)<br>    skip_nodes_with_system_pods   = optional(bool)<br>    empty_bulk_delete_max         = optional(string)<br>    balance_similar_node_groups   = optional(bool)<br>    new_pod_scale_up_delay        = optional(string)<br><br>    max_graceful_termination_sec = optional(string)<br>    max_node_provisioning_time   = optional(string)<br>    max_unready_nodes            = optional(number)<br>    max_unready_percentage       = optional(number)<br><br>    scale_down_unready               = optional(string)<br>    scale_down_unneeded              = optional(string)<br>    scale_down_utilization_threshold = optional(string)<br>    scale_down_delay_after_add       = optional(string)<br>    scale_down_delay_after_delete    = optional(string)<br>    scale_down_delay_after_failure   = optional(string)<br>  })</pre> | `{}` | no |
 | <a name="input_automatic_channel_upgrade"></a> [automatic\_channel\_upgrade](#input\_automatic\_channel\_upgrade) | Upgrade channel for the Kubernetes cluster. | `string` | `null` | no |
+| <a name="input_azure_cni"></a> [azure\_cni](#input\_azure\_cni) | Azure CNI configuration. | <pre>object({<br>    enabled             = bool<br>    enable_overlay_mode = optional(bool, false)<br>    subnet_id           = optional(string)<br>  })</pre> | <pre>{<br>  "enabled": false<br>}</pre> | no |
 | <a name="input_cluster_identity_name"></a> [cluster\_identity\_name](#input\_cluster\_identity\_name) | Name of the user assigned cluster identity. | `string` | `null` | no |
 | <a name="input_enable_azure_policy"></a> [enable\_azure\_policy](#input\_enable\_azure\_policy) | Enable the Azure Policy plugin. | `bool` | `false` | no |
 | <a name="input_enable_flux"></a> [enable\_flux](#input\_enable\_flux) | Enable the flux extension on the cluster. | `bool` | `false` | no |
@@ -58,10 +59,7 @@ Examples can be found under the [examples](./examples/) directory.
 | <a name="input_service_cidr"></a> [service\_cidr](#input\_service\_cidr) | Service CIDR for AKS. | `string` | `"10.250.0.0/20"` | no |
 | <a name="input_sku_tier"></a> [sku\_tier](#input\_sku\_tier) | The SKU tier of AKS. | `string` | `"Free"` | no |
 | <a name="input_storage_profile"></a> [storage\_profile](#input\_storage\_profile) | Storage profile of the cluster. | <pre>object({<br>    blob_driver_enabled         = optional(bool)<br>    file_driver_enabled         = optional(bool)<br>    disk_driver_enabled         = optional(bool)<br>    disk_driver_version         = optional(string)<br>    snapshot_controller_enabled = optional(bool)<br>  })</pre> | `{}` | no |
-| <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | Subnet ID to use with the default nodepool if using Azure CNI. | `string` | `null` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags applied to created resources. | `map(string)` | `null` | no |
-| <a name="input_use_azure_cni"></a> [use\_azure\_cni](#input\_use\_azure\_cni) | Use Azure CNI. | `bool` | `false` | no |
-| <a name="input_use_azure_cni_overlay"></a> [use\_azure\_cni\_overlay](#input\_use\_azure\_cni\_overlay) | Use Azure CNI in Overlay mode. | `bool` | `false` | no |
 
 ## Outputs
 

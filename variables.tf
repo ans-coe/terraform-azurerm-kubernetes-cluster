@@ -109,6 +109,12 @@ variable "use_azure_cni" {
   default     = false
 }
 
+variable "use_azure_cni_overlay" {
+  description = "Use Azure CNI in Overlay mode."
+  type        = bool
+  default     = false
+}
+
 variable "network_policy" {
   description = "Network policy that should be used. ('calico' or 'azure')"
   type        = string

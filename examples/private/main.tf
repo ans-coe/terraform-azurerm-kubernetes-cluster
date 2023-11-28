@@ -80,5 +80,5 @@ module "akc" {
   network_policy = "azure"
 
   // NOTE: Add an explicit dependenccy to the private DNS zone.
-  depends_on = [ azurerm_private_dns_zone.akc ]
+  depends_on = [azurerm_private_dns_zone.akc]
 }

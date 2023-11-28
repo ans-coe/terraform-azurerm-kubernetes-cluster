@@ -61,6 +61,7 @@ Examples can be found under the [examples](./examples/) directory.
 | <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | Subnet ID to use with the default nodepool if using Azure CNI. | `string` | `null` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags applied to created resources. | `map(string)` | `null` | no |
 | <a name="input_use_azure_cni"></a> [use\_azure\_cni](#input\_use\_azure\_cni) | Use Azure CNI. | `bool` | `false` | no |
+| <a name="input_use_azure_cni_overlay"></a> [use\_azure\_cni\_overlay](#input\_use\_azure\_cni\_overlay) | Use Azure CNI in Overlay mode. | `bool` | `false` | no |
 
 ## Outputs
 

@@ -91,9 +91,10 @@ resource "azurerm_kubernetes_cluster" "main" {
   local_account_disabled = true
 
   network_profile {
-    network_plugin    = var.use_azure_cni ? "azure" : "kubenet"
-    network_policy    = var.network_policy
-    load_balancer_sku = "standard"
+    network_plugin      = var.use_azure_cni ? "azure" : "kubenet"
+    network_plugin_mode = var.use_azure_cni && var.use_azure_cni_overlay ? "overlay" : null
+    network_policy      = var.network_policy
+    load_balancer_sku   = "standard"
 
     pod_cidr       = var.use_azure_cni ? null : "10.244.0.0/16"
     service_cidr   = var.service_cidr

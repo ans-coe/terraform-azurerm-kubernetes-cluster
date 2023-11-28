@@ -54,8 +54,10 @@ module "akc" {
 
   node_count = 2
 
-  use_azure_cni  = true
-  subnet_id      = azurerm_subnet.akc.id
+  azure_cni = {
+    enabled             = true
+    enable_overlay_mode = true // Deploy using Overlay mode for IP conservation.
+    subnet_id           = azurerm_subnet.akc.id
+  }
   network_policy = "azure"
-  service_cidr   = "10.1.0.0/16"
 }

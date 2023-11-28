@@ -42,11 +42,11 @@ locals {
 //       checks the schema of the name
 
 resource "azurerm_role_assignment" "main_aks_user_identity_network_contributor" {
-  count = var.use_azure_cni ? 1 : 0
+  count = var.azure_cni["enabled"] ? 1 : 0
 
   principal_id = azurerm_user_assigned_identity.cluster.principal_id
   // NOTE: converts the subnet_id to the vnet_id to set role at a higher level
-  scope                = try(one(regex("(/.*)/subnets", var.subnet_id)), "/subscriptions/UNUSED")
+  scope                = try(one(regex("(/.*)/subnets", var.azure_cni["subnet_id"])), "/subscriptions/UNUSED")
   role_definition_name = "Network Contributor"
 
   skip_service_principal_aad_check = true
@@ -91,11 +91,12 @@ resource "azurerm_kubernetes_cluster" "main" {
   local_account_disabled = true
 
   network_profile {
-    network_plugin    = var.use_azure_cni ? "azure" : "kubenet"
-    network_policy    = var.network_policy
-    load_balancer_sku = "standard"
+    network_plugin      = var.azure_cni["enabled"] ? "azure" : "kubenet"
+    network_plugin_mode = var.azure_cni["enable_overlay_mode"] ? "overlay" : null
+    network_policy      = var.network_policy
+    load_balancer_sku   = "standard"
 
-    pod_cidr       = var.use_azure_cni ? null : "10.244.0.0/16"
+    pod_cidr       = var.azure_cni["enabled"] ? null : "10.244.0.0/16"
     service_cidr   = var.service_cidr
     dns_service_ip = cidrhost(var.service_cidr, 10)
   }
@@ -119,7 +120,7 @@ resource "azurerm_kubernetes_cluster" "main" {
     max_count           = var.node_count_max
 
     zones                    = var.node_config["zones"]
-    vnet_subnet_id           = var.use_azure_cni ? var.subnet_id : null
+    vnet_subnet_id           = var.azure_cni["subnet_id"]
     enable_node_public_ip    = var.node_config["enable_node_public_ip"]
     node_public_ip_prefix_id = var.node_config["node_public_ip_prefix_id"]
 

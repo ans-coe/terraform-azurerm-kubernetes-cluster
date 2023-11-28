@@ -87,8 +87,10 @@ module "akc" {
   node_count     = 2
   node_count_max = 3
 
-  use_azure_cni  = true
-  subnet_id      = azurerm_subnet.akc.id
+  azure_cni = {
+    enabled   = true
+    subnet_id = azurerm_subnet.akc.id
+  }
   network_policy = "azure"
   service_cidr   = "10.1.0.0/16"
 

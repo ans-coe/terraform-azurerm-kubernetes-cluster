@@ -176,8 +176,8 @@ variable "node_config" {
     node_public_ip_prefix_id = optional(string)
 
     os_sku                 = optional(string)
-    os_disk_size_gb        = optional(string)
-    os_disk_type           = optional(number)
+    os_disk_type           = optional(string)
+    os_disk_size_gb        = optional(number)
     ultra_ssd_enabled      = optional(bool)
     kubelet_disk_type      = optional(string)
     enable_host_encryption = optional(bool)
